@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.ResponseBody
 import java.io.File
 import java.io.FileOutputStream
@@ -18,7 +20,17 @@ import java.io.FileOutputStream
  */
 class FileDownloader(private val context: Context) {
 
-    fun saveToDownloads(body: ResponseBody, fileName: String): File {
+    /**
+     * suspend + withContext(IO), not a plain blocking fun: `body` is a
+     * live, unconsumed ResponseBody from a suspend Retrofit call — the
+     * coroutine resumes on Dispatchers.Main.immediate as soon as headers
+     * arrive, but reading the body is a *separate*, still-pending
+     * blocking socket read. Doing that read un-dispatched on Main throws
+     * NetworkOnMainThreadException (confirmed via a real crash log, not
+     * a theoretical concern — see the FileBrowserViewModel.download()
+     * call site this exists for).
+     */
+    suspend fun saveToDownloads(body: ResponseBody, fileName: String): File = withContext(Dispatchers.IO) {
         val dir = File(context.getExternalFilesDir(null), "downloads").apply { mkdirs() }
         val target = File(dir, sanitize(fileName))
         body.byteStream().use { input ->
@@ -26,7 +38,7 @@ class FileDownloader(private val context: Context) {
                 input.copyTo(output, bufferSize = 32 * 1024)
             }
         }
-        return target
+        target
     }
 
     fun viewIntentFor(file: File, mimeType: String): Intent {
