@@ -2,7 +2,10 @@ package com.vault.app.presentation.browser
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,38 +63,64 @@ fun FileBrowserScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
-                TopAppBar(
-                    title = { Text("Vault") },
-                    actions = {
-                        IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                        }
-                        IconButton(onClick = viewModel::lockVault) {
-                            Icon(Icons.Filled.Lock, contentDescription = "Lock vault")
-                        }
-                    },
-                )
+                if (state.selectionMode) {
+                    TopAppBar(
+                        title = { Text("${state.selectedIds.size} selected") },
+                        navigationIcon = {
+                            IconButton(onClick = viewModel::clearSelection) {
+                                Icon(Icons.Filled.Close, contentDescription = "Cancel selection")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = viewModel::selectAll) {
+                                Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
+                            }
+                            // Bulk-action icons (download / copy / move)
+                            // land here once their own screens exist —
+                            // deliberately not wired yet, see HANDOFF.md's
+                            // build order. Nothing to call them into today.
+                        },
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text("Vault") },
+                        actions = {
+                            IconButton(onClick = viewModel::refresh) {
+                                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                            }
+                            IconButton(onClick = viewModel::lockVault) {
+                                Icon(Icons.Filled.Lock, contentDescription = "Lock vault")
+                            }
+                        },
+                    )
+                }
                 Breadcrumb(items = state.breadcrumb, onClick = onBreadcrumbClick)
             }
         },
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (fabExpanded) {
-                    SmallFabAction(
-                        icon = Icons.Filled.CreateNewFolder,
-                        label = "New folder",
-                        onClick = { fabExpanded = false; viewModel.setCreateFolderDialogVisible(true) },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SmallFabAction(
-                        icon = Icons.Filled.UploadFile,
-                        label = "Upload",
-                        onClick = { fabExpanded = false; pickFileLauncher.launch("*/*") },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-                FloatingActionButton(onClick = { fabExpanded = !fabExpanded }) {
-                    Icon(if (fabExpanded) Icons.Filled.Close else Icons.Filled.Add, contentDescription = "Actions")
+            // Hidden during selection: creating a folder or uploading a
+            // file mid-multi-select is a confusing combination, and the
+            // FAB would visually compete with the selection top bar's
+            // own actions.
+            if (!state.selectionMode) {
+                Column(horizontalAlignment = Alignment.End) {
+                    if (fabExpanded) {
+                        SmallFabAction(
+                            icon = Icons.Filled.CreateNewFolder,
+                            label = "New folder",
+                            onClick = { fabExpanded = false; viewModel.setCreateFolderDialogVisible(true) },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SmallFabAction(
+                            icon = Icons.Filled.UploadFile,
+                            label = "Upload",
+                            onClick = { fabExpanded = false; pickFileLauncher.launch("*/*") },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    FloatingActionButton(onClick = { fabExpanded = !fabExpanded }) {
+                        Icon(if (fabExpanded) Icons.Filled.Close else Icons.Filled.Add, contentDescription = "Actions")
+                    }
                 }
             }
         },
@@ -114,8 +144,17 @@ fun FileBrowserScreen(
                     items(state.items, key = { it.id }) { item ->
                         FileRow(
                             item = item,
+                            selectionMode = state.selectionMode,
+                            selected = item.id in state.selectedIds,
                             onClick = {
-                                if (item.isFolder) onNavigateToFolder(item.id) else viewModel.download(item)
+                                when {
+                                    state.selectionMode -> viewModel.toggleSelection(item)
+                                    item.isFolder -> onNavigateToFolder(item.id)
+                                    else -> viewModel.download(item)
+                                }
+                            },
+                            onLongClick = {
+                                if (state.selectionMode) viewModel.toggleSelection(item) else viewModel.enterSelectionMode(item)
                             },
                             onDelete = { viewModel.requestDelete(item) },
                         )
@@ -189,25 +228,44 @@ private fun Breadcrumb(items: List<com.vault.app.data.remote.dto.BreadcrumbItemD
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRow(item: FileListItemDto, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun FileRow(
+    item: FileListItemDto,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
     ListItem(
         headlineContent = { Text(item.originalName) },
         supportingContent = {
             if (!item.isFolder) Text(formatSize(item.size))
         },
         leadingContent = {
-            Icon(
-                if (item.isFolder) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
-                contentDescription = null,
-            )
-        },
-        trailingContent = {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete")
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = { onClick() })
+            } else {
+                Icon(
+                    if (item.isFolder) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+                    contentDescription = null,
+                )
             }
         },
-        modifier = Modifier.clickable(onClick = onClick),
+        trailingContent = {
+            // Per-row delete only makes sense outside selection mode —
+            // once selecting, this icon would be a confusing second way
+            // to act on a row right next to its checkbox.
+            if (!selectionMode) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                }
+            }
+        },
+        modifier = Modifier
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     )
 }
 

@@ -30,6 +30,14 @@ data class FileBrowserUiState(
     val showCreateFolderDialog: Boolean = false,
     val pendingDelete: FileListItemDto? = null,
     val locked: Boolean = false,
+    // Selection is scoped to this screen/folder only — each folder is its
+    // own nav-graph destination with its own FileBrowserViewModel
+    // instance, so there's no cross-folder multi-select today. Tapping a
+    // folder row while selectionMode is true toggles its selection rather
+    // than navigating into it, for exactly that reason: navigating away
+    // would abandon this ViewModel (and its selection) entirely.
+    val selectionMode: Boolean = false,
+    val selectedIds: Set<String> = emptySet(),
 )
 
 data class DownloadedFile(val file: File, val mimeType: String)
@@ -64,10 +72,19 @@ class FileBrowserViewModel @Inject constructor(
             filesResult
                 .onSuccess { items ->
                     _state.update {
+                        // Reconciles selectedIds against the fresh list —
+                        // matters once bulk actions (copy/move/delete) can
+                        // trigger a refresh() while items are selected;
+                        // without this, selectedIds could reference items
+                        // that no longer exist. Drops out of selection mode
+                        // entirely if nothing selected survives.
+                        val stillSelected = it.selectedIds.intersect(items.map { i -> i.id }.toSet())
                         it.copy(
                             loading = false,
                             items = items,
                             breadcrumb = crumbResult.getOrDefault(it.breadcrumb),
+                            selectedIds = stillSelected,
+                            selectionMode = it.selectionMode && stillSelected.isNotEmpty(),
                         )
                     }
                 }
@@ -173,6 +190,33 @@ class FileBrowserViewModel @Inject constructor(
 
     fun consumeToast() {
         _state.update { it.copy(toast = null) }
+    }
+
+    fun enterSelectionMode(item: FileListItemDto) {
+        _state.update { it.copy(selectionMode = true, selectedIds = setOf(item.id)) }
+    }
+
+    fun toggleSelection(item: FileListItemDto) {
+        _state.update { current ->
+            val newSelection = if (item.id in current.selectedIds) {
+                current.selectedIds - item.id
+            } else {
+                current.selectedIds + item.id
+            }
+            // Dropping out of selection mode when the last item is
+            // deselected matches Photos/Gmail-style multi-select — an
+            // empty selection toolbar has nothing useful to do, so this
+            // returns to normal browsing instead of leaving it showing.
+            current.copy(selectionMode = newSelection.isNotEmpty(), selectedIds = newSelection)
+        }
+    }
+
+    fun selectAll() {
+        _state.update { it.copy(selectedIds = it.items.map { item -> item.id }.toSet()) }
+    }
+
+    fun clearSelection() {
+        _state.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
     }
 
     /**
