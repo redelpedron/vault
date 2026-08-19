@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SECURITY NOTE (read before shipping this beyond your own device):
+
+  cleartextTrafficPermitted="true" here disables Android's default
+  block on plain-HTTP traffic, for every destination, app-wide. That is
+  the deliberate, explicit trade-off for talking to a self-hosted vault
+  server at a local-network IP with no TLS in front of it — the
+  alternative was hardcoding a fixed IP/domain allowlist, which breaks
+  the moment the phone changes networks or the server's LAN IP changes
+  via DHCP.
+
+  What this does NOT protect against: anyone else on the same LAN (open
+  wifi, a compromised router, an ARP-spoofing neighbor) can read or
+  tamper with the X-Vault-Token header and the file bytes in flight,
+  even though the vault's *stored* content is still end-to-end
+  encrypted at rest by the Go backend. The session token itself is
+  effectively a bearer credential in cleartext on that network segment
+  for the life of the session.
+
+  Two ways to close this gap later, in increasing order of effort:
+    1. Point the Go server's existing TLSCertFile/TLSKeyFile config
+       (see config.json / main.go) at a self-signed cert, then pin that
+       cert's public key here via <pin-set> instead of allowing
+       cleartext at all.
+    2. Put the server behind Tailscale/WireGuard and only ever reach it
+       over that overlay network.
+  Out of scope for milestone 1; flagging so it isn't forgotten.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

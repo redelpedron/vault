@@ -1,0 +1,64 @@
+name: Android release APK
+
+# Builds the unsigned debug APK (same build type as android-debug-build.yml)
+# and attaches it to a GitHub Release whenever a version tag is pushed,
+# e.g. `git tag v0.0.0 && git push origin v0.0.0`.
+#
+# Still unsigned beyond Android's auto-generated debug key — same
+# installable-via-sideload-only caveat as the existing debug workflow.
+# See README.md "Signed release" for what changes if a real
+# signed release build is wanted later.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # required to create the Release and upload the asset
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure required Android SDK packages are installed
+        run: |
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+          cache-read-only: false
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Locate and rename APK
+        id: apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK produced — check the build log above." >&2
+            exit 1
+          fi
+          RENAMED="app/build/outputs/apk/debug/vault-${{ github.ref_name }}.apk"
+          cp "$APK_PATH" "$RENAMED"
+          echo "path=$RENAMED" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with APK attached
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.path }}
+          generate_release_notes: true

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded file bytes land in the app's own external files dir
+         (no storage permission needed on API 26+) and are exposed to
+         other apps only via this scoped FileProvider URI — never a
+         raw file:// path, which android:exported apps have been unable
+         to receive since targetSdk 24 (StrictMode) and is blocked
+         outright as of targetSdk 28. -->
+    <external-files-path name="downloads" path="downloads/" />
+</paths>

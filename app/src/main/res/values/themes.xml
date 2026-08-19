@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Referenced only from AndroidManifest (window background/splash
+         color before Compose takes over) — all real theming is done in
+         Kotlin via presentation/theme/Theme.kt, per Compose convention. -->
+    <style name="Theme.Vault" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#1B1F3B</item>
+    </style>
+</resources>
