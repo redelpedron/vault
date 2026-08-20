@@ -39,7 +39,10 @@ data class FileBrowserUiState(
     // would abandon this ViewModel (and its selection) entirely.
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
+    val viewMode: ViewMode = ViewMode.LIST,
 )
+
+enum class ViewMode { LIST, GRID }
 
 data class DownloadedFile(val file: File, val mimeType: String)
 
@@ -223,6 +226,10 @@ class FileBrowserViewModel @Inject constructor(
 
     fun clearSelection() {
         _state.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
+    }
+
+    fun toggleViewMode() {
+        _state.update { it.copy(viewMode = if (it.viewMode == ViewMode.LIST) ViewMode.GRID else ViewMode.LIST) }
     }
 
     /**

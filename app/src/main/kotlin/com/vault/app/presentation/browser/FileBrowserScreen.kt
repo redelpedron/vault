@@ -9,6 +9,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -90,6 +93,15 @@ fun FileBrowserScreen(
                     TopAppBar(
                         title = { Text("Vault") },
                         actions = {
+                            IconButton(onClick = viewModel::toggleViewMode) {
+                                // Icon shown is what tapping switches TO,
+                                // not the current mode — standard convention
+                                // for this kind of toggle.
+                                Icon(
+                                    if (state.viewMode == ViewMode.LIST) Icons.Filled.GridView else Icons.Filled.ViewList,
+                                    contentDescription = if (state.viewMode == ViewMode.LIST) "Switch to grid view" else "Switch to list view",
+                                )
+                            }
                             IconButton(onClick = viewModel::refresh) {
                                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                             }
@@ -145,26 +157,54 @@ fun FileBrowserScreen(
                     "Empty folder — tap + to upload a file or create a folder.",
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
-                else -> LazyColumn {
-                    items(state.items, key = { it.id }) { item ->
-                        FileRow(
-                            item = item,
-                            imageLoader = viewModel.imageLoader,
-                            selectionMode = state.selectionMode,
-                            selected = item.id in state.selectedIds,
-                            onClick = {
-                                when {
-                                    state.selectionMode -> viewModel.toggleSelection(item)
-                                    item.isFolder -> onNavigateToFolder(item.id)
-                                    else -> viewModel.download(item)
-                                }
-                            },
-                            onLongClick = {
-                                if (state.selectionMode) viewModel.toggleSelection(item) else viewModel.enterSelectionMode(item)
-                            },
-                            onDelete = { viewModel.requestDelete(item) },
-                        )
-                        HorizontalDivider()
+                else -> when (state.viewMode) {
+                    ViewMode.LIST -> LazyColumn {
+                        items(state.items, key = { it.id }) { item ->
+                            FileRow(
+                                item = item,
+                                imageLoader = viewModel.imageLoader,
+                                selectionMode = state.selectionMode,
+                                selected = item.id in state.selectedIds,
+                                onClick = {
+                                    when {
+                                        state.selectionMode -> viewModel.toggleSelection(item)
+                                        item.isFolder -> onNavigateToFolder(item.id)
+                                        else -> viewModel.download(item)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (state.selectionMode) viewModel.toggleSelection(item) else viewModel.enterSelectionMode(item)
+                                },
+                                onDelete = { viewModel.requestDelete(item) },
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                    ViewMode.GRID -> LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 100.dp),
+                        contentPadding = PaddingValues(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(state.items, key = { it.id }) { item ->
+                            FileGridCell(
+                                item = item,
+                                imageLoader = viewModel.imageLoader,
+                                selectionMode = state.selectionMode,
+                                selected = item.id in state.selectedIds,
+                                onClick = {
+                                    when {
+                                        state.selectionMode -> viewModel.toggleSelection(item)
+                                        item.isFolder -> onNavigateToFolder(item.id)
+                                        else -> viewModel.download(item)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (state.selectionMode) viewModel.toggleSelection(item) else viewModel.enterSelectionMode(item)
+                                },
+                                onDelete = { viewModel.requestDelete(item) },
+                            )
+                        }
                     }
                 }
             }
@@ -285,6 +325,88 @@ private fun FileRow(
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     )
+}
+
+/**
+ * Grid counterpart to FileRow — same click/long-click/selection semantics,
+ * different layout: a big square thumbnail-or-icon with the name below,
+ * rather than a horizontal list row. Selection uses a checkbox overlaid
+ * on the corner instead of replacing the leading icon (there's no
+ * separate "leading slot" in a grid cell the way ListItem provides one).
+ * Delete also becomes a small corner overlay for the same reason — kept
+ * rather than dropped, so grid mode doesn't regress a capability list
+ * mode already has.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileGridCell(
+    item: FileListItemDto,
+    imageLoader: ImageLoader,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                RoundedCornerShape(8.dp),
+            )
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(4.dp),
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+            when {
+                item.isFolder -> Icon(
+                    Icons.Filled.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(0.6f).align(Alignment.Center),
+                )
+                isThumbnailable(item.mimeType) -> AsyncImage(
+                    model = ThumbnailRequest(item.id, item.mimeType),
+                    imageLoader = imageLoader,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                )
+                else -> Icon(
+                    Icons.Filled.InsertDriveFile,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(0.5f).align(Alignment.Center),
+                )
+            }
+
+            if (selectionMode) {
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
+            } else {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Delete",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+        Text(
+            item.originalName,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
 }
 
 @Composable
