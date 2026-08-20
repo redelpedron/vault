@@ -34,7 +34,14 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null
-          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+          # android-35/build-tools;35.0.0 added alongside the existing 34
+          # ones (not replacing them) — compileSdk moved to 35 in
+          # app/build.gradle.kts, because Coil 3.3.0 transitively pulls
+          # Compose UI 1.8.2, which needs compileSdk 35+. targetSdk/minSdk
+          # are untouched, so the android-34 packages may still matter for
+          # other tooling in this job; keeping both is the smaller, safer
+          # diff over swapping one for the other.
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4

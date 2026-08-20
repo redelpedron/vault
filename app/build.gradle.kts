@@ -9,7 +9,20 @@ plugins {
 
 android {
     namespace = "com.vault.app"
-    compileSdk = 34
+    // Bumped from 34 to 35, not because any app code needs newer APIs —
+    // targetSdk/minSdk below are untouched, so runtime behavior doesn't
+    // change at all. This is purely to satisfy checkDebugAarMetadata:
+    // Coil 3.3.0 (see the dependencies block below) transitively pulls
+    // Compose UI 1.8.2, newer than what compose-bom:2024.10.01 pins on
+    // its own, and Compose 1.8.2's AARs require compileSdk 35+ — confirmed
+    // by a real CI failure listing all 12 offending artifacts, not a
+    // guess. AGP 8.7.0 already supports compileSdk up to 35 without any
+    // AGP/Gradle version bump (35 was in fact the ceiling AGP 8.7.0's own
+    // error output named) — this is a one-line, self-contained fix, not
+    // the start of a bigger toolchain-upgrade cascade. The CI workflow's
+    // sdkmanager step needs the matching `platforms;android-35` package
+    // installed too, or this trades one failure for a different one.
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.vault.app"
@@ -93,18 +106,14 @@ dependencies {
     // authenticated Retrofit session (see ThumbnailFetcher.kt), not a
     // plain URL, so no coil-network-* artifact is needed at all.
     //
-    // PINNED TO 3.3.0, NOT THE LATEST 3.5.0 — this project's compileSdk is
-    // 34 and AGP 8.7.0 caps out at compileSdk 35; Coil 3.5.0's own AARs
-    // require compileSdk 36, and its transitive AndroidX dependencies drag
-    // several Compose libraries to versions requiring 35+, breaking
-    // checkDebugAarMetadata project-wide (confirmed by a real CI run, not
-    // a theoretical concern). 3.3.0 is confirmed to exist as a real
-    // published release; unlike everything else added this session, its
-    // exact compileSdk requirement was NOT independently confirmed via
-    // search before picking it — if checkDebugAarMetadata still fails on
-    // this, the compileSdk number in that error pins down precisely how
-    // much further to step back, or whether bumping this project's own
-    // compileSdk/AGP version is the better trade after all.
+    // PINNED TO 3.3.0, NOT THE LATEST 3.5.0 — 3.5.0's own AARs require
+    // compileSdk 36 outright (confirmed by CI). 3.3.0 doesn't have that
+    // problem, but still transitively pulls Compose UI 1.8.2, newer than
+    // compose-bom:2024.10.01 — which is why compileSdk is 35 above, not
+    // 34. Both of these were found by real CI failures, not predicted in
+    // advance — if a future Coil bump reintroduces a compileSdk-36
+    // requirement, that's the same category of fix again: step the
+    // version back, or move compileSdk to 36 once AGP here supports it.
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
 
     // Networking. kotlinx.serialization over Moshi/Gson: it's JetBrains-
