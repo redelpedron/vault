@@ -42,6 +42,12 @@ jobs:
           gradle-version: "8.9"
           cache-read-only: false
 
+      - name: Show Kotlin and Gradle versions
+        run: |
+          java -version
+          gradle --version
+          gradle :app:buildEnvironment
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 

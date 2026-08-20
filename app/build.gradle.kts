@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.vault.app"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.vault.app"
@@ -19,7 +19,7 @@ android {
         // happens to be the first API level adaptive launcher icons work at,
         // which is why there's no legacy round/square icon fallback below.
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "0.1.0-milestone1"
     }
