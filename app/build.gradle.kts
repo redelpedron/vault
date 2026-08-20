@@ -86,15 +86,26 @@ dependencies {
     // decoding, an LRU memory cache, and a disk cache correctly (without
     // OOMing on a large photo) is a lot of surface area to get wrong for
     // something this well-trodden. Coil 3.x specifically (io.coil-kt.coil3,
-    // not the legacy io.coil-kt 2.x line — verified current as of this
-    // dependency being added) is Kotlin-first, coroutine-native (fits this
-    // app's existing suspend-based repository layer directly), and
-    // JetBrains/Google-adjacent in maintenance activity. coil-core no
-    // longer bundles a network fetcher by default in 3.x — irrelevant
-    // here, since thumbnails are fetched through this app's own
+    // not the legacy io.coil-kt 2.x line) is Kotlin-first, coroutine-native
+    // (fits this app's existing suspend-based repository layer directly).
+    // coil-core no longer bundles a network fetcher by default in 3.x —
+    // irrelevant here, since thumbnails are fetched through this app's own
     // authenticated Retrofit session (see ThumbnailFetcher.kt), not a
     // plain URL, so no coil-network-* artifact is needed at all.
-    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
+    //
+    // PINNED TO 3.3.0, NOT THE LATEST 3.5.0 — this project's compileSdk is
+    // 34 and AGP 8.7.0 caps out at compileSdk 35; Coil 3.5.0's own AARs
+    // require compileSdk 36, and its transitive AndroidX dependencies drag
+    // several Compose libraries to versions requiring 35+, breaking
+    // checkDebugAarMetadata project-wide (confirmed by a real CI run, not
+    // a theoretical concern). 3.3.0 is confirmed to exist as a real
+    // published release; unlike everything else added this session, its
+    // exact compileSdk requirement was NOT independently confirmed via
+    // search before picking it — if checkDebugAarMetadata still fails on
+    // this, the compileSdk number in that error pins down precisely how
+    // much further to step back, or whether bumping this project's own
+    // compileSdk/AGP version is the better trade after all.
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
 
     // Networking. kotlinx.serialization over Moshi/Gson: it's JetBrains-
     // maintained (same org as the Kotlin compiler), needs no reflection at
