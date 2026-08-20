@@ -106,15 +106,32 @@ dependencies {
     // authenticated Retrofit session (see ThumbnailFetcher.kt), not a
     // plain URL, so no coil-network-* artifact is needed at all.
     //
-    // PINNED TO 3.3.0, NOT THE LATEST 3.5.0 — 3.5.0's own AARs require
-    // compileSdk 36 outright (confirmed by CI). 3.3.0 doesn't have that
-    // problem, but still transitively pulls Compose UI 1.8.2, newer than
-    // compose-bom:2024.10.01 — which is why compileSdk is 35 above, not
-    // 34. Both of these were found by real CI failures, not predicted in
-    // advance — if a future Coil bump reintroduces a compileSdk-36
-    // requirement, that's the same category of fix again: step the
-    // version back, or move compileSdk to 36 once AGP here supports it.
-    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+    // PINNED TO 3.0.0 — the first stable Coil 3.x release, not a guess
+    // this time: Coil's own changelog directly confirms 3.0.0 was built
+    // against Kotlin 2.0.0, matching this project's Kotlin 2.0.21 pin at
+    // the language-version level that Kotlin's metadata-compatibility
+    // check actually cares about (2.0.0 vs 2.0.21 are both "language
+    // version 2.0" — mutually compatible; patch differences within 2.0.x
+    // don't trip this check, only a 2.0→2.2 jump does).
+    //
+    // The full story, each step found by a real CI failure, not predicted:
+    //   3.5.0 → failed checkDebugAarMetadata: needs compileSdk 36 outright.
+    //   3.3.0 → passed compileSdk 36, but STILL failed checkDebugAarMetadata
+    //           on compileSdk 35 (fixed by bumping this project's compileSdk
+    //           34→35, safe since AGP 8.7.0 already supports it) — then
+    //           failed *again*, differently: kspDebugKotlin rejected Coil's
+    //           bytecode as "compiled with an incompatible version of
+    //           Kotlin" (2.2.0 vs this project's 2.0.21). Both failures
+    //           trace to the exact same Coil 3.3.0 changelog entry: "Update
+    //           Kotlin to 2.2.0. Update Compose to 1.8.2."
+    //   3.0.0 → this pin. Directly confirmed via Coil's own changelog,
+    //           not inferred — the first genuinely evidence-backed choice
+    //           in this saga rather than a targeted guess.
+    // compileSdk stays at 35, not reverted to 34, even though 3.0.0
+    // (Compose UI 1.6.8-era) likely wouldn't need it — 35 is already
+    // confirmed working by a real CI run, and reverting would be an
+    // unforced extra change for no benefit.
+    implementation("io.coil-kt.coil3:coil-compose:3.0.0")
 
     // Networking. kotlinx.serialization over Moshi/Gson: it's JetBrains-
     // maintained (same org as the Kotlin compiler), needs no reflection at
