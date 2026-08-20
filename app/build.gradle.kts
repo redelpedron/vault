@@ -80,6 +80,22 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.8.2")
 
+    // Thumbnails: image loading, caching, and downsampling-to-target-size
+    // for the file browser's file/folder rows. Justification per SKILL.md
+    // "every dependency must justify itself": hand-rolling bitmap
+    // decoding, an LRU memory cache, and a disk cache correctly (without
+    // OOMing on a large photo) is a lot of surface area to get wrong for
+    // something this well-trodden. Coil 3.x specifically (io.coil-kt.coil3,
+    // not the legacy io.coil-kt 2.x line — verified current as of this
+    // dependency being added) is Kotlin-first, coroutine-native (fits this
+    // app's existing suspend-based repository layer directly), and
+    // JetBrains/Google-adjacent in maintenance activity. coil-core no
+    // longer bundles a network fetcher by default in 3.x — irrelevant
+    // here, since thumbnails are fetched through this app's own
+    // authenticated Retrofit session (see ThumbnailFetcher.kt), not a
+    // plain URL, so no coil-network-* artifact is needed at all.
+    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
+
     // Networking. kotlinx.serialization over Moshi/Gson: it's JetBrains-
     // maintained (same org as the Kotlin compiler), needs no reflection at
     // runtime, and its converter plugs into Retrofit with one line.

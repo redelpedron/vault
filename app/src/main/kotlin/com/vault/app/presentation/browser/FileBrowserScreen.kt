@@ -9,16 +9,21 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
 import com.vault.app.data.remote.dto.FileListItemDto
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -144,6 +149,7 @@ fun FileBrowserScreen(
                     items(state.items, key = { it.id }) { item ->
                         FileRow(
                             item = item,
+                            imageLoader = viewModel.imageLoader,
                             selectionMode = state.selectionMode,
                             selected = item.id in state.selectedIds,
                             onClick = {
@@ -232,6 +238,7 @@ private fun Breadcrumb(items: List<com.vault.app.data.remote.dto.BreadcrumbItemD
 @Composable
 private fun FileRow(
     item: FileListItemDto,
+    imageLoader: ImageLoader,
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
@@ -244,13 +251,24 @@ private fun FileRow(
             if (!item.isFolder) Text(formatSize(item.size))
         },
         leadingContent = {
-            if (selectionMode) {
-                Checkbox(checked = selected, onCheckedChange = { onClick() })
-            } else {
-                Icon(
-                    if (item.isFolder) Icons.Filled.Folder else Icons.Filled.InsertDriveFile,
+            when {
+                selectionMode -> Checkbox(checked = selected, onCheckedChange = { onClick() })
+                // AsyncImage falls back to its error/placeholder state
+                // (nothing drawn, since neither is set) on fetch failure —
+                // e.g. a network hiccup or an unsupported codec inside an
+                // otherwise-video/* file. That's an acceptable silent
+                // fallback for a thumbnail specifically: worst case, the
+                // row just shows blank where an icon would normally be,
+                // never a crash or a stuck spinner.
+                item.isFolder -> Icon(Icons.Filled.Folder, contentDescription = null)
+                isThumbnailable(item.mimeType) -> AsyncImage(
+                    model = ThumbnailRequest(item.id, item.mimeType),
+                    imageLoader = imageLoader,
                     contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
                 )
+                else -> Icon(Icons.Filled.InsertDriveFile, contentDescription = null)
             }
         },
         trailingContent = {

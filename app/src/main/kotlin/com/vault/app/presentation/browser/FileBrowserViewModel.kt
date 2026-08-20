@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coil3.ImageLoader
 import com.vault.app.data.remote.dto.BreadcrumbItemDto
 import com.vault.app.data.remote.dto.FileListItemDto
 import com.vault.app.data.repository.VaultRepository
@@ -47,6 +48,11 @@ class FileBrowserViewModel @Inject constructor(
     private val repository: VaultRepository,
     @ApplicationContext private val appContext: Context,
     savedStateHandle: SavedStateHandle,
+    // Exposed as a plain public val, not wrapped — the Screen reads this
+    // once and passes it straight to every AsyncImage's imageLoader
+    // param. See di/ImageModule.kt for why this is provided through Hilt
+    // rather than Coil's global-singleton setter.
+    val imageLoader: ImageLoader,
 ) : ViewModel() {
 
     /** "" means the vault's root folder — see Destinations for the nav-arg sentinel translation. */
