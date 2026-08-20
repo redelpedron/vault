@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.vault.app.presentation.browser.FileBrowserScreen
+import com.vault.app.presentation.folderpicker.FolderPickerScreen
 import com.vault.app.presentation.orgauth.OrgAuthScreen
 import com.vault.app.presentation.serversetup.ServerSetupScreen
 import com.vault.app.presentation.usermanagement.UserManagementScreen
@@ -84,6 +85,22 @@ fun VaultNavGraph(rootViewModel: RootViewModel = hiltViewModel()) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+                onNavigateToPicker = { operation, itemIds ->
+                    navController.navigate(Destinations.folderPickerRoute(operation, itemIds))
+                },
+            )
+        }
+
+        composable(
+            route = Destinations.FOLDER_PICKER_PATTERN,
+            arguments = listOf(
+                navArgument("operation") { type = NavType.StringType },
+                navArgument("itemIds") { type = NavType.StringType },
+            ),
+        ) {
+            FolderPickerScreen(
+                onDone = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() },
             )
         }
     }

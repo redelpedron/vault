@@ -15,4 +15,11 @@ object Destinations {
     const val BROWSER_ROOT_SENTINEL = "root"
     const val BROWSER_PATTERN = "browser/{folderId}"
     fun browserRoute(folderId: String) = "browser/${folderId.ifEmpty { BROWSER_ROOT_SENTINEL }}"
+
+    // itemIds is comma-joined — fine given these are server-generated IDs
+    // (UUID-style), never user-supplied text that could itself contain a
+    // comma. operation is the literal string "move" or "copy".
+    const val FOLDER_PICKER_PATTERN = "folder_picker/{operation}/{itemIds}"
+    fun folderPickerRoute(operation: String, itemIds: List<String>) =
+        "folder_picker/$operation/${itemIds.joinToString(",")}"
 }

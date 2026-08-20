@@ -35,12 +35,22 @@ fun FileBrowserScreen(
     onNavigateToFolder: (id: String) -> Unit,
     onBreadcrumbClick: (id: String) -> Unit,
     onLockVault: () -> Unit,
+    onNavigateToPicker: (operation: String, itemIds: List<String>) -> Unit,
     viewModel: FileBrowserViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var fabExpanded by remember { mutableStateOf(false) }
+
+    // Re-fetches every time this screen re-enters composition — covers
+    // returning from FolderPickerScreen after a successful move/copy,
+    // the same mechanism used elsewhere in this app (see
+    // VaultListScreen's identical LaunchedEffect(Unit) comment). Costs one
+    // harmless redundant fetch on first entry (ViewModel's own init{}
+    // already calls refresh() once) — accepted rather than adding a
+    // SavedStateHandle nav-result plumbing just to avoid it.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
     val pickFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -80,13 +90,17 @@ fun FileBrowserScreen(
                             }
                         },
                         actions = {
+                            IconButton(onClick = { onNavigateToPicker("move", state.selectedIds.toList()) }) {
+                                Icon(Icons.Filled.DriveFileMove, contentDescription = "Move selected")
+                            }
+                            IconButton(onClick = { onNavigateToPicker("copy", state.selectedIds.toList()) }) {
+                                Icon(Icons.Filled.ContentCopy, contentDescription = "Copy selected")
+                            }
                             IconButton(onClick = viewModel::selectAll) {
                                 Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
                             }
-                            // Bulk-action icons (download / copy / move)
-                            // land here once their own screens exist —
-                            // deliberately not wired yet, see HANDOFF.md's
-                            // build order. Nothing to call them into today.
+                            // Bulk download lands here once it's built —
+                            // last remaining item in the agreed build order.
                         },
                     )
                 } else {
@@ -176,6 +190,8 @@ fun FileBrowserScreen(
                                     if (state.selectionMode) viewModel.toggleSelection(item) else viewModel.enterSelectionMode(item)
                                 },
                                 onDelete = { viewModel.requestDelete(item) },
+                                onMove = { onNavigateToPicker("move", listOf(item.id)) },
+                                onCopy = { onNavigateToPicker("copy", listOf(item.id)) },
                             )
                             HorizontalDivider()
                         }
@@ -255,8 +271,10 @@ fun FileBrowserScreen(
     }
 }
 
+// Not private — reused by FolderPickerScreen for the same breadcrumb UI
+// rather than duplicating it.
 @Composable
-private fun Breadcrumb(items: List<com.vault.app.data.remote.dto.BreadcrumbItemDto>, onClick: (String) -> Unit) {
+fun Breadcrumb(items: List<com.vault.app.data.remote.dto.BreadcrumbItemDto>, onClick: (String) -> Unit) {
     if (items.isEmpty()) return
     Row(
         modifier = Modifier
@@ -284,7 +302,11 @@ private fun FileRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDelete: () -> Unit,
+    onMove: () -> Unit,
+    onCopy: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     ListItem(
         headlineContent = { Text(item.originalName) },
         supportingContent = {
@@ -312,12 +334,34 @@ private fun FileRow(
             }
         },
         trailingContent = {
-            // Per-row delete only makes sense outside selection mode —
-            // once selecting, this icon would be a confusing second way
-            // to act on a row right next to its checkbox.
+            // Per-row actions only make sense outside selection mode —
+            // once selecting, this menu would be a confusing second way
+            // to act on a row right next to its checkbox; use the
+            // selection top bar's actions instead.
             if (!selectionMode) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        // Rename slots in here next — same menu, one more
+                        // DropdownMenuItem, no restructuring needed.
+                        DropdownMenuItem(
+                            text = { Text("Copy") },
+                            leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                            onClick = { menuExpanded = false; onCopy() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move") },
+                            leadingIcon = { Icon(Icons.Filled.DriveFileMove, contentDescription = null) },
+                            onClick = { menuExpanded = false; onMove() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = { menuExpanded = false; onDelete() },
+                        )
+                    }
                 }
             }
         },
