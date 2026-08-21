@@ -99,8 +99,9 @@ fun FileBrowserScreen(
                             IconButton(onClick = viewModel::selectAll) {
                                 Icon(Icons.Filled.SelectAll, contentDescription = "Select all")
                             }
-                            // Bulk download lands here once it's built —
-                            // last remaining item in the agreed build order.
+                            IconButton(onClick = viewModel::downloadSelected) {
+                                Icon(Icons.Filled.Download, contentDescription = "Download selected")
+                            }
                         },
                     )
                 } else {
@@ -273,7 +274,7 @@ fun FileBrowserScreen(
 
     state.pendingRename?.let { item ->
         RenameDialog(
-            currentName = item.originalName,
+            item = item,
             busy = state.renameBusy,
             error = state.renameError,
             onDismiss = viewModel::cancelRename,
@@ -483,16 +484,28 @@ private fun SmallFabAction(icon: androidx.compose.ui.graphics.vector.ImageVector
 
 @Composable
 private fun RenameDialog(
-    currentName: String,
+    item: FileListItemDto,
     busy: Boolean,
     error: String?,
     onDismiss: () -> Unit,
     onConfirm: (newName: String) -> Unit,
 ) {
-    // Pre-filled with the current name (plain String, cursor defaults to
-    // the end) — matches every other dialog's text-field pattern in this
-    // file, no need for TextFieldValue/selection-range handling here.
-    var name by remember { mutableStateOf(currentName) }
+    val currentName = item.originalName
+
+    // Folders don't have an extension concept to protect. For files, the
+    // extension is everything from the LAST '.', with two guards against
+    // false positives: a leading dot (dotfiles like ".gitignore" — the
+    // dot is part of the name, not a separator, matching how most file
+    // managers already treat them) and a trailing dot with nothing after
+    // it. Anything else falls back to the whole name being editable,
+    // same as before this existed — this only activates for the common,
+    // unambiguous case.
+    val lastDot = currentName.lastIndexOf('.')
+    val hasExtension = !item.isFolder && lastDot > 0 && lastDot < currentName.length - 1
+    val extension = if (hasExtension) currentName.substring(lastDot) else ""
+    var baseName by remember { mutableStateOf(if (hasExtension) currentName.substring(0, lastDot) else currentName) }
+
+    val fullNewName = baseName.trim() + extension
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -500,9 +513,14 @@ private fun RenameDialog(
         text = {
             Column {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
+                    value = baseName,
+                    onValueChange = { baseName = it },
                     label = { Text("Name") },
+                    // Extension shown as a fixed suffix inside the field,
+                    // not part of the editable value — this is the whole
+                    // point: it can't be accidentally dropped or typo'd
+                    // while renaming just the name portion.
+                    suffix = if (hasExtension) { { Text(extension) } } else null,
                     singleLine = true,
                     isError = error != null,
                     modifier = Modifier.fillMaxWidth(),
@@ -518,8 +536,8 @@ private fun RenameDialog(
                 // Also disabled when unchanged, not just blank — renaming
                 // to the exact same name is a pointless round trip to the
                 // server for a result that changes nothing.
-                enabled = !busy && name.isNotBlank() && name != currentName,
-                onClick = { onConfirm(name.trim()) },
+                enabled = !busy && baseName.isNotBlank() && fullNewName != currentName,
+                onClick = { onConfirm(fullNewName) },
             ) { Text(if (busy) "Renaming…" else "Rename") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

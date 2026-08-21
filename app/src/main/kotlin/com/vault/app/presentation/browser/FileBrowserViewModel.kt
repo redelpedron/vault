@@ -201,6 +201,46 @@ class FileBrowserViewModel @Inject constructor(
         }
     }
 
+    fun downloadSelected() {
+        val ids = _state.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            _state.update { it.copy(busyMessage = "Downloading ${ids.size} item${if (ids.size == 1) "" else "s"}…") }
+            repository.bulkDownload(ids)
+                .onSuccess { response ->
+                    val body = response.body()
+                    if (!response.isSuccessful || body == null) {
+                        _state.update { it.copy(busyMessage = null, toast = "Download failed") }
+                        return@onSuccess
+                    }
+                    // Server always names this "vault-download.zip"
+                    // (fixed, no per-request uniqueness — see
+                    // handleBulkDownload) but this app already ignores
+                    // Content-Disposition entirely for single downloads
+                    // too (uses item.originalName instead, never reads
+                    // the header) — same pattern here, timestamped so
+                    // repeated bulk downloads don't silently overwrite
+                    // each other in the Downloads folder.
+                    val fileName = "vault-download-${System.currentTimeMillis()}.zip"
+                    val file = downloader.saveToDownloads(body, fileName)
+                    _state.update {
+                        it.copy(
+                            busyMessage = null,
+                            downloadedFile = DownloadedFile(file, "application/zip"),
+                            // Selection cleared on success — matches the
+                            // pattern of exiting selection mode once its
+                            // bulk action completes.
+                            selectionMode = false,
+                            selectedIds = emptySet(),
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(busyMessage = null, toast = e.message ?: "Download failed") }
+                }
+        }
+    }
+
     fun download(item: FileListItemDto) {
         viewModelScope.launch {
             _state.update { it.copy(busyMessage = "Downloading ${item.originalName}…") }
