@@ -33,25 +33,52 @@ android {
         // which is why there's no legacy round/square icon fallback below.
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0-milestone1"
+        // Android refuses to install an update over an existing install
+        // unless versionCode strictly increases — a static 1 here would
+        // let a signed release install once, then silently fail every
+        // update after. VERSION_CODE is set by the CI workflow to
+        // github.run_number (auto-incrementing per workflow run,
+        // guaranteed monotonic for this repo) — falls back to 1 for a
+        // local build without it, matching the same graceful-degradation
+        // pattern as the signingConfigs block below.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+        // Cosmetic, unlike versionCode above — doesn't affect whether an
+        // update installs, just what's shown to the user. Set by CI to
+        // the pushed tag name; falls back to the milestone label locally.
+        versionName = System.getenv("VERSION_NAME") ?: "0.1.0-milestone1"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Populated only when these env vars are present — set by the
+            // CI workflow after decoding the base64 keystore secret to a
+            // file (see android-release-apk.yml's "Decode keystore" step).
+            // Left entirely unset for a local `gradle assembleRelease`
+            // without them: AGP itself then refuses the build with its own
+            // clear "signing config incomplete" error, rather than this
+            // file NPE'ing on a null env var or silently producing an
+            // unsigned/mis-signed APK.
+            System.getenv("KEYSTORE_PATH")?.let { storeFile = file(it) }
+            System.getenv("KEYSTORE_PASSWORD")?.let { storePassword = it }
+            System.getenv("KEY_ALIAS")?.let { keyAlias = it }
+            System.getenv("KEY_PASSWORD")?.let { keyPassword = it }
+        }
     }
 
     buildTypes {
         debug {
             // This build is CI-produced and unsigned beyond Android's default
-            // debug key (auto-generated per machine) — see the workflow and
-            // README for why, and what changes if/when a signed release is
-            // wanted later.
+            // debug key (auto-generated per machine) — see android-debug-build.yml
+            // and README for why. Unrelated to the release signing above:
+            // this stays exactly as it was, debug builds are still never
+            // signed with the real release key.
             isMinifyEnabled = false
             isDebuggable = true
         }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // No signingConfig: `assembleRelease` is intentionally left
-            // unconfigured/unused by CI right now (see README "Signed
-            // release" section for what's needed to turn this on).
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

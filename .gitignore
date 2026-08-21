@@ -1,2 +1,4 @@
 build.sh
 process.sh
+*.jks
+*.keystore

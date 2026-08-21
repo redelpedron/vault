@@ -1,13 +1,13 @@
 name: Android release APK
 
-# Builds the unsigned debug APK (same build type as android-debug-build.yml)
-# and attaches it to a GitHub Release whenever a version tag is pushed,
-# e.g. `git tag v0.0.0 && git push origin v0.0.0`.
+# Builds a SIGNED release APK and attaches it to a GitHub Release whenever
+# a version tag is pushed, e.g. `git tag v0.0.0 && git push origin v0.0.0`.
 #
-# Still unsigned beyond Android's auto-generated debug key — same
-# installable-via-sideload-only caveat as the existing debug workflow.
-# See README.md "Signed release" for what changes if a real
-# signed release build is wanted later.
+# Signed with the real release key (KEYSTORE_BASE64/KEYSTORE_PASSWORD/
+# KEY_ALIAS/KEY_PASSWORD secrets) — installable as a normal update path,
+# not sideload-only. See app/build.gradle.kts's signingConfigs block for
+# how these secrets reach Gradle; they're decoded/exported here, never
+# committed or logged.
 on:
   push:
     tags:
@@ -55,18 +55,41 @@ jobs:
           gradle --version
           gradle :app:buildEnvironment
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          # $RUNNER_TEMP, not the checked-out workspace: it's per-job,
+          # outside the git working tree (so there's no chance of it ever
+          # ending up in a commit), and wiped when the runner VM is torn
+          # down after this job finishes regardless of the explicit
+          # cleanup step below — that step is defense-in-depth, not the
+          # only thing standing between this file and persisting anywhere.
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          # github.run_number: auto-incrementing per workflow run, so this
+          # is guaranteed to strictly increase across tags — see
+          # defaultConfig's comment in build.gradle.kts for why that's
+          # load-bearing, not cosmetic.
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: ${{ github.ref_name }}
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Locate and rename APK
         id: apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n1)
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
           if [ -z "$APK_PATH" ]; then
             echo "No APK produced — check the build log above." >&2
             exit 1
           fi
-          RENAMED="app/build/outputs/apk/debug/vault-${{ github.ref_name }}.apk"
+          RENAMED="app/build/outputs/apk/release/vault-${{ github.ref_name }}.apk"
           cp "$APK_PATH" "$RENAMED"
           echo "path=$RENAMED" >> "$GITHUB_OUTPUT"
 
@@ -75,3 +98,7 @@ jobs:
         with:
           files: ${{ steps.apk.outputs.path }}
           generate_release_notes: true
+
+      - name: Remove decoded keystore
+        if: always() # runs even if an earlier step failed, not just on success
+        run: rm -f "$RUNNER_TEMP/release.jks"
