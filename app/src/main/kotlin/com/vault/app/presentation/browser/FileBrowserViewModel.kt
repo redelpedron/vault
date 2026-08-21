@@ -30,6 +30,9 @@ data class FileBrowserUiState(
     val downloadedFile: DownloadedFile? = null, // one-shot: screen launches a view intent then clears it
     val showCreateFolderDialog: Boolean = false,
     val pendingDelete: FileListItemDto? = null,
+    val pendingRename: FileListItemDto? = null,
+    val renameBusy: Boolean = false,
+    val renameError: String? = null,
     val locked: Boolean = false,
     // Selection is scoped to this screen/folder only — each folder is its
     // own nav-graph destination with its own FileBrowserViewModel
@@ -165,6 +168,35 @@ class FileBrowserViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     _state.update { it.copy(toast = e.message ?: "Couldn't delete ${item.originalName}") }
+                }
+        }
+    }
+
+    fun requestRename(item: FileListItemDto) {
+        _state.update { it.copy(pendingRename = item, renameError = null) }
+    }
+
+    fun cancelRename() {
+        _state.update { it.copy(pendingRename = null, renameError = null) }
+    }
+
+    fun confirmRename(newName: String) {
+        val item = _state.value.pendingRename ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(renameBusy = true, renameError = null) }
+            repository.rename(item.id, newName)
+                .onSuccess {
+                    // Unlike delete's toast-and-move-on: a rename failure
+                    // (blank name, duplicate in this folder, etc.) is worth
+                    // letting the user immediately retry the name without
+                    // re-opening the dialog — so this stays open on
+                    // failure (renameError set below) and only closes here,
+                    // on confirmed success.
+                    _state.update { it.copy(renameBusy = false, pendingRename = null, toast = "Renamed to $newName") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(renameBusy = false, renameError = e.message ?: "Couldn't rename") }
                 }
         }
     }

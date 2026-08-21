@@ -192,6 +192,7 @@ fun FileBrowserScreen(
                                 onDelete = { viewModel.requestDelete(item) },
                                 onMove = { onNavigateToPicker("move", listOf(item.id)) },
                                 onCopy = { onNavigateToPicker("copy", listOf(item.id)) },
+                                onRename = { viewModel.requestRename(item) },
                             )
                             HorizontalDivider()
                         }
@@ -269,6 +270,16 @@ fun FileBrowserScreen(
             },
         )
     }
+
+    state.pendingRename?.let { item ->
+        RenameDialog(
+            currentName = item.originalName,
+            busy = state.renameBusy,
+            error = state.renameError,
+            onDismiss = viewModel::cancelRename,
+            onConfirm = { newName -> viewModel.confirmRename(newName) },
+        )
+    }
 }
 
 // Not private — reused by FolderPickerScreen for the same breadcrumb UI
@@ -304,6 +315,7 @@ private fun FileRow(
     onDelete: () -> Unit,
     onMove: () -> Unit,
     onCopy: () -> Unit,
+    onRename: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -344,8 +356,11 @@ private fun FileRow(
                         Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        // Rename slots in here next — same menu, one more
-                        // DropdownMenuItem, no restructuring needed.
+                        DropdownMenuItem(
+                            text = { Text("Rename") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = { menuExpanded = false; onRename() },
+                        )
                         DropdownMenuItem(
                             text = { Text("Copy") },
                             leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
@@ -464,6 +479,51 @@ private fun SmallFabAction(icon: androidx.compose.ui.graphics.vector.ImageVector
             Icon(icon, contentDescription = label)
         }
     }
+}
+
+@Composable
+private fun RenameDialog(
+    currentName: String,
+    busy: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (newName: String) -> Unit,
+) {
+    // Pre-filled with the current name (plain String, cursor defaults to
+    // the end) — matches every other dialog's text-field pattern in this
+    // file, no need for TextFieldValue/selection-range handling here.
+    var name by remember { mutableStateOf(currentName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    isError = error != null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                // Also disabled when unchanged, not just blank — renaming
+                // to the exact same name is a pointless round trip to the
+                // server for a result that changes nothing.
+                enabled = !busy && name.isNotBlank() && name != currentName,
+                onClick = { onConfirm(name.trim()) },
+            ) { Text(if (busy) "Renaming…" else "Rename") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
