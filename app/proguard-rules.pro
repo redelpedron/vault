@@ -1,8 +1,8 @@
-# Intentionally minimal — the CI-built debug variant never runs R8
-# (isMinifyEnabled = false), so this file has no effect on the artifact
-# GitHub Actions produces. It exists so `assembleRelease` isn't left with
-# a dangling proguardFiles() reference to a missing file, should that
-# variant ever get configured for real (see README "Signed release").
+# Not "intentionally minimal" anymore — CI now runs a real, minified
+# assembleRelease (signed, see android-release-apk.yml), so this file has
+# real effect on the shipped artifact for the first time. The comment
+# below described the pre-signing state; kept here as history, not
+# current fact.
 -keepattributes Signature,InnerClasses,*Annotation*
 
 # kotlinx.serialization generates synthetic serializer classes per
@@ -13,3 +13,17 @@
 -keepclasseswithmembers class com.vault.app.data.remote.dto.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# androidx.security:security-crypto (EncryptedSharedPreferences — see
+# SessionManager.kt) transitively pulls in Google Tink, which references
+# com.google.errorprone.annotations.* (CanIgnoreReturnValue,
+# CheckReturnValue, Immutable, RestrictedApi, ...) for compile-time-only
+# static-analysis annotations — never a real runtime dependency, but R8
+# treats any referenced-but-missing class as a hard error by default. This
+# is confirmed via a real minifyReleaseWithR8 failure, not a preemptive
+# guess: the first real signed release build hit exactly this, since
+# isMinifyEnabled was false everywhere before (debug builds never
+# minify), so this gap was never exercised until now. Wildcarded across
+# the whole package rather than the 4 specific classes R8 happened to
+# report this run — Tink may reference others R8 hasn't surfaced yet.
+-dontwarn com.google.errorprone.annotations.**
