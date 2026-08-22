@@ -160,6 +160,25 @@ dependencies {
     // unforced extra change for no benefit.
     implementation("io.coil-kt.coil3:coil-compose:3.0.0")
 
+    // Biometric re-auth gate on returning from background — see
+    // MainActivity's FLAG_SECURE comment for the other half of this
+    // (blanking the app-switcher thumbnail). 1.1.0 is the current stable
+    // (non-alpha) line, confirmed directly against the official Jetpack
+    // page before picking it — androidx.biometric:biometric-ktx exists
+    // but is still 1.4.0-alpha as of this session, not used here for a
+    // security-critical dependency. BiometricPrompt's Activity-hosted
+    // constructor requires FragmentActivity specifically (confirmed
+    // against AndroidX's own source, not assumed) — see MainActivity,
+    // which now extends FragmentActivity instead of ComponentActivity.
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // ProcessLifecycleOwner — observes the WHOLE APP's foreground/
+    // background transitions (leaving to home screen and back), not
+    // internal Compose navigation, which is what the biometric gate
+    // needs to trigger on. Same version as lifecycle-runtime-ktx above;
+    // released in lockstep as part of the same Lifecycle library group.
+    implementation("androidx.lifecycle:lifecycle-process:2.8.6")
+
     // Networking. kotlinx.serialization over Moshi/Gson: it's JetBrains-
     // maintained (same org as the Kotlin compiler), needs no reflection at
     // runtime, and its converter plugs into Retrofit with one line.
