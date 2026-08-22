@@ -10,6 +10,7 @@ import com.vault.app.data.remote.dto.BreadcrumbItemDto
 import com.vault.app.data.remote.dto.FileListItemDto
 import com.vault.app.data.repository.VaultRepository
 import com.vault.app.presentation.navigation.Destinations
+import com.vault.app.presentation.security.BiometricGateController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +60,12 @@ class FileBrowserViewModel @Inject constructor(
     // param. See di/ImageModule.kt for why this is provided through Hilt
     // rather than Coil's global-singleton setter.
     val imageLoader: ImageLoader,
+    // Same "expose the singleton directly" pattern as imageLoader above —
+    // the Screen calls notifyLaunchingTrustedActivity() on this directly
+    // before its two external-Activity launches (file picker, view-
+    // downloaded-file intent). See BiometricGateController's doc comment
+    // on that method for why it's needed.
+    val biometricGateController: BiometricGateController,
 ) : ViewModel() {
 
     /** "" means the vault's root folder — see Destinations for the nav-arg sentinel translation. */

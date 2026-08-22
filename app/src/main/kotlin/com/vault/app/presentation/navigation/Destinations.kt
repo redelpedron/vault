@@ -5,6 +5,7 @@ object Destinations {
     const val VAULT_LIST = "vault_list"
     const val ORG_AUTH = "org_auth"
     const val USER_MANAGEMENT = "user_management"
+    const val SETTINGS = "settings"
 
     // folderId is nav-arg-encoded as the literal string "root" for the
     // vault's top level, since Compose Navigation's default string arg

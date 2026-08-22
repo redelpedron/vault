@@ -125,6 +125,22 @@ class SessionManager @Inject constructor(
             .apply()
     }
 
+    // ---- Privacy/security settings — see SettingsScreen. Both default to
+    // true (secure-by-default): a fresh install ships protected, and the
+    // user opts OUT rather than having to know to opt in. ----
+
+    /** Backs MainActivity's FLAG_SECURE — read at cold start, and re-applied live
+     * the moment this changes (see SettingsScreen, which holds the only
+     * Activity/window reference available to toggle it immediately). */
+    var privacyScreenEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PRIVACY_SCREEN_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_PRIVACY_SCREEN_ENABLED, value).apply()
+
+    /** Read by BiometricGateController.onAppForegrounded on every foreground event. */
+    var biometricGateEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BIOMETRIC_GATE_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_BIOMETRIC_GATE_ENABLED, value).apply()
+
     private companion object {
         const val KEY_SERVER_URL = "server_base_url"
         const val KEY_TOKEN = "vault_token"
@@ -134,5 +150,7 @@ class SessionManager @Inject constructor(
         const val KEY_USER_ORG_ID = "user_org_id"
         const val KEY_USER_ROLE = "user_role"
         const val KEY_USER_EMAIL = "user_email"
+        const val KEY_PRIVACY_SCREEN_ENABLED = "privacy_screen_enabled"
+        const val KEY_BIOMETRIC_GATE_ENABLED = "biometric_gate_enabled"
     }
 }

@@ -71,6 +71,13 @@ fun FileBrowserScreen(
         state.downloadedFile?.let { downloaded ->
             val downloader = FileDownloader(context)
             val intent = downloader.viewIntentFor(downloaded.file, downloaded.mimeType)
+            // Must be called before startActivity, not after — the
+            // suppression flag needs to already be set by the time this
+            // app's process goes through onStop for the external
+            // viewer app taking over. See
+            // BiometricGateController.notifyLaunchingTrustedActivity's
+            // doc comment for why this exists at all.
+            viewModel.biometricGateController.notifyLaunchingTrustedActivity()
             runCatching { context.startActivity(intent) }
                 .onFailure { snackbarHostState.showSnackbar("Saved, but no app can open this file type") }
             viewModel.consumeDownloadedFile()
@@ -146,7 +153,11 @@ fun FileBrowserScreen(
                         SmallFabAction(
                             icon = Icons.Filled.UploadFile,
                             label = "Upload",
-                            onClick = { fabExpanded = false; pickFileLauncher.launch("*/*") },
+                            onClick = {
+                                fabExpanded = false
+                                viewModel.biometricGateController.notifyLaunchingTrustedActivity()
+                                pickFileLauncher.launch("*/*")
+                            },
                         )
                         Spacer(Modifier.height(8.dp))
                     }

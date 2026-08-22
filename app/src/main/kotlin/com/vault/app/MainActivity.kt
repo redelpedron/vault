@@ -11,6 +11,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.vault.app.data.local.SessionManager
 import com.vault.app.presentation.navigation.VaultNavGraph
 import com.vault.app.presentation.security.BiometricGateController
 import com.vault.app.presentation.theme.VaultTheme
@@ -27,6 +28,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var biometricGateController: BiometricGateController
+
+    @Inject
+    lateinit var sessionManager: SessionManager
 
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) {
@@ -45,21 +49,23 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // FLAG_SECURE, set once for the Activity's whole lifetime rather
-        // than toggled per-screen: the OS only needs it active AT THE
-        // MOMENT it captures a screenshot or an app-switcher thumbnail,
-        // so "always on" is both the simplest implementation and the
-        // only reliable one — a toggle tied to onPause/onResume risks a
-        // race where the snapshot is taken before the flag lands. This
-        // single flag does three things simultaneously: blanks this
-        // app's thumbnail in the Recent Apps switcher (a plain gray
-        // rectangle instead of vault contents), makes screenshot/screen-
-        // recording attempts of this app fail, and blocks the window
-        // from being mirrored to a non-secure external display. This is
-        // the "don't show a snapshot" half of the protection; the
-        // biometric gate wired below is the separate "re-authenticate
-        // before showing the live screen again" half.
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        // FLAG_SECURE, set once at cold start per the persisted Settings
+        // toggle (default true — secure by default) rather than
+        // unconditionally as before this setting existed. Toggling it
+        // live while the app is already running (e.g. from
+        // SettingsScreen) is a separate, direct window.setFlags/
+        // clearFlags call made from there via LocalContext-as-Activity —
+        // not routed back through here, since there's no clean way for a
+        // deep Composable to re-invoke onCreate. This call only covers
+        // the initial state on launch. See onCreate's original comment
+        // history (still applies) for why FLAG_SECURE itself is
+        // always-on-or-off rather than toggled per lifecycle event when
+        // the setting IS enabled: the OS only needs it active at the
+        // moment it captures a snapshot, so a stable on/off state per
+        // the user's preference is both simplest and most reliable.
+        if (sessionManager.privacyScreenEnabled) {
+            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
 

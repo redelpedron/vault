@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +36,17 @@ fun VaultListScreen(
     onChangeServer: () -> Unit,
     onSignIn: () -> Unit,
     onOpenUserManagement: () -> Unit,
+    // Only reachable from VaultListScreen onward, never from
+    // ServerSetupScreen — that IS "only visible when connected to the
+    // server" in this app's actual nav flow: ServerSetupScreen is the
+    // one screen that comes BEFORE any server connection exists, and
+    // VaultListScreen (this one) is unreachable without first completing
+    // it. No separate runtime connectivity/ping check was added — that
+    // would need its own network call, loading state, and failure
+    // handling for a comparatively low-value gate on a settings menu.
+    // Flagging this interpretation explicitly in case "connected to the
+    // server" meant something more literal, like live reachability.
+    onOpenSettings: () -> Unit,
     viewModel: VaultListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -73,6 +85,9 @@ fun VaultListScreen(
                         onChangeServer()
                     }) {
                         Icon(Icons.Filled.Settings, contentDescription = "Change server")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Shield, contentDescription = "Privacy & Security settings")
                     }
                 },
             )

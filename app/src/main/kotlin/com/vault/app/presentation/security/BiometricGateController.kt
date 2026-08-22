@@ -34,6 +34,23 @@ class BiometricGateController @Inject constructor(
     private val _isGateActive = MutableStateFlow(false)
     val isGateActive: StateFlow<Boolean> = _isGateActive.asStateFlow()
 
+    // Set right before launching a trusted external Activity this app
+    // itself started on purpose — the file picker (upload) and the
+    // "view downloaded file" intent are the two current cases (see
+    // FileBrowserScreen). Launching either causes THIS app's process to
+    // go through onStop/onStart, which ProcessLifecycleOwner can't tell
+    // apart from the user actually leaving to another app — without this
+    // flag, picking a file to upload or viewing a downloaded file would
+    // both spuriously re-trigger the biometric prompt the instant control
+    // returns. Plain var, not AtomicBoolean: every access happens on the
+    // main thread (Activity lifecycle callbacks and Compose UI callbacks
+    // both are), so there's no real concurrency to guard against.
+    private var suppressNextForeground = false
+
+    fun notifyLaunchingTrustedActivity() {
+        suppressNextForeground = true
+    }
+
     // One-shot signal: true when auth fails or is cancelled, telling
     // VaultNavGraph to lock the vault and return to the vault list — the
     // same fail-securely default the app's existing explicit Lock button
@@ -54,7 +71,22 @@ class BiometricGateController @Inject constructor(
      * server-setup or vault-list screens with a prompt.
      */
     fun onAppForegrounded(activity: FragmentActivity) {
+        if (suppressNextForeground) {
+            // Consumed unconditionally, regardless of whether a vault is
+            // even unlocked below — a stale flag must never leak into a
+            // later, unrelated background/foreground cycle. Known,
+            // accepted limitation: this is a one-shot suppression, not a
+            // matched request/response pair — if a picker Activity itself
+            // triggers more than one onStop/onStart cycle on this app
+            // before returning a result (uncommon, but not impossible on
+            // every device/picker combination), only the first of those
+            // extra cycles is suppressed. Not worth a more complex
+            // request-matching mechanism for an edge case this narrow.
+            suppressNextForeground = false
+            return
+        }
         if (sessionManager.vaultToken == null) return
+        if (!sessionManager.biometricGateEnabled) return
 
         val biometricManager = BiometricManager.from(activity)
         val canAuthenticate = biometricManager.canAuthenticate(

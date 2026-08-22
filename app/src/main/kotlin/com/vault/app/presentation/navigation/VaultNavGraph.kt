@@ -26,6 +26,7 @@ import com.vault.app.presentation.folderpicker.FolderPickerScreen
 import com.vault.app.presentation.orgauth.OrgAuthScreen
 import com.vault.app.presentation.security.BiometricGateViewModel
 import com.vault.app.presentation.serversetup.ServerSetupScreen
+import com.vault.app.presentation.settings.SettingsScreen
 import com.vault.app.presentation.usermanagement.UserManagementScreen
 import com.vault.app.presentation.vaultlist.VaultListScreen
 
@@ -78,7 +79,12 @@ fun VaultNavGraph(
                     },
                     onSignIn = { navController.navigate(Destinations.ORG_AUTH) },
                     onOpenUserManagement = { navController.navigate(Destinations.USER_MANAGEMENT) },
+                    onOpenSettings = { navController.navigate(Destinations.SETTINGS) },
                 )
+            }
+
+            composable(Destinations.SETTINGS) {
+                SettingsScreen(onBack = { navController.popBackStack() })
             }
 
             composable(Destinations.ORG_AUTH) {
